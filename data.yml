@@ -1,0 +1,22 @@
+package ru.davidgrief.chatdg.services;
+
+import org.bukkit.Bukkit;
+import org.bukkit.entity.Player;
+import ru.davidgrief.chatdg.ChatDG;
+import java.util.Locale;
+
+public final class AntiCapsService {
+    public static final class Result { public final boolean cancelled; public final String message; Result(boolean c,String m){cancelled=c;message=m;} }
+    private final ChatDG plugin; public AntiCapsService(ChatDG plugin){this.plugin=plugin;}
+    public Result process(Player p,String msg){
+        if(!plugin.getConfig().getBoolean("anticaps.enabled",true)||p.hasPermission("chatdg.chat.bypass.caps")) return new Result(false,msg);
+        int minLen=plugin.getConfig().getInt("anticaps.min-length",6), minLetters=plugin.getConfig().getInt("anticaps.min-letters",4); if(msg.length()<minLen)return new Result(false,msg);
+        int letters=0,upper=0; for(char c:msg.toCharArray()) if(Character.isLetter(c)){letters++; if(Character.isUpperCase(c))upper++;}
+        if(letters<minLetters)return new Result(false,msg); double denominator=plugin.getConfig().getBoolean("anticaps.ignore-digits-and-symbols",true)?letters:Math.max(1,msg.length()); double percent=upper*100.0D/denominator; if(percent<=plugin.getConfig().getDouble("anticaps.max-percent",70D))return new Result(false,msg);
+        String mode=plugin.getConfig().getString("anticaps.mode","SMART").toUpperCase(Locale.ROOT);
+        if("CANCEL".equals(mode))return new Result(true,msg);
+        if("COMMAND".equals(mode)){String cmd=plugin.getConfig().getString("anticaps.command","");if(!cmd.isEmpty())Bukkit.dispatchCommand(Bukkit.getConsoleSender(),cmd.replace("%player%",p.getName()));return new Result(true,msg);}
+        if("LOWERCASE".equals(mode))return new Result(false,msg.toLowerCase(Locale.ROOT));
+        String lower=msg.toLowerCase(Locale.ROOT); StringBuilder smart=new StringBuilder(lower); boolean sentence=true; for(int i=0;i<smart.length();i++){char c=smart.charAt(i);if(sentence&&Character.isLetter(c)){smart.setCharAt(i,Character.toUpperCase(c));sentence=false;}if(c=='.'||c=='!'||c=='?')sentence=true;}return new Result(false,smart.toString());
+    }
+}

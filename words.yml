@@ -1,0 +1,52 @@
+package ru.davidgrief.chatdg.services;
+
+import org.bukkit.Bukkit;
+import org.bukkit.Sound;
+import org.bukkit.entity.Player;
+import ru.davidgrief.chatdg.ChatDG;
+
+import java.lang.reflect.Array;
+import java.lang.reflect.Method;
+import java.util.HashSet;
+import java.util.Locale;
+import java.util.Set;
+
+public final class MentionService {
+    private final ChatDG plugin;
+    public MentionService(ChatDG plugin){this.plugin=plugin;}
+
+    public String process(Player sender,String message){
+        if(!plugin.getConfig().getBoolean("mentions.enabled",true)||!sender.hasPermission("chatdg.mention"))return message;
+        String result=message; Set<Player> mentioned=new HashSet<Player>();
+        for(Player target:Bukkit.getOnlinePlayers()){
+            String token="@"+target.getName(); int idx=indexOfIgnoreCase(result,token);
+            if(idx>=0 && (idx==0 || !Character.isLetterOrDigit(result.charAt(idx-1)))){
+                String color=plugin.getConfig().getString("mentions.color","&#FF5555");
+                result=result.substring(0,idx)+color+token+"&r"+result.substring(idx+token.length()); mentioned.add(target);
+            }
+        }
+        for(Player target:mentioned) notifyMention(sender,target);
+        return result;
+    }
+    private int indexOfIgnoreCase(String source,String search){return source.toLowerCase(Locale.ROOT).indexOf(search.toLowerCase(Locale.ROOT));}
+    private void notifyMention(Player sender,Player target){
+        if(target.hasPermission("chatdg.mention.bypass")||plugin.getIgnoreService().isIgnoring(target.getUniqueId(),sender.getUniqueId()))return;
+        if(plugin.getConfig().getBoolean("mentions.sound.enabled",true)){
+            String name=plugin.getConfig().getString("mentions.sound.name","ENTITY_EXPERIENCE_ORB_PICKUP");
+            try{target.playSound(target.getLocation(),Sound.valueOf(name),1f,1f);}catch(Throwable ex){try{target.playSound(target.getLocation(),Sound.valueOf("ORB_PICKUP"),1f,1f);}catch(Throwable ignored){}}
+        }
+        if(plugin.getConfig().getBoolean("mentions.notification.enabled",true)) target.sendMessage(plugin.getMessageService().format("mention.notification",sender,java.util.Collections.singletonMap("mentioned",target.getName())));
+        if(plugin.getConfig().getBoolean("mentions.title.enabled",false)){
+            try{target.sendTitle(plugin.getColorUtil().colorize(plugin.getConfig().getString("mentions.title.title","&cУпоминание")),plugin.getColorUtil().colorize(plugin.getConfig().getString("mentions.title.subtitle","&f%player%").replace("%player%",sender.getName())),5,40,10);}catch(Throwable ignored){}
+        }
+        if(plugin.getConfig().getBoolean("mentions.actionbar.enabled",false)) sendActionBar(target,plugin.getColorUtil().colorize(plugin.getConfig().getString("mentions.actionbar.text","&e%player% упомянул вас").replace("%player%",sender.getName())));
+    }
+    private void sendActionBar(Player player,String text){
+        try{
+            Class<?> type=Class.forName("net.md_5.bungee.api.ChatMessageType"); Object action=Enum.valueOf((Class)type,"ACTION_BAR");
+            Class<?> tc=Class.forName("net.md_5.bungee.api.chat.TextComponent"); Method from=tc.getMethod("fromLegacyText",String.class); Object comps=from.invoke(null,text);
+            Object spigot=player.getClass().getMethod("spigot").invoke(player); Class<?> base=Class.forName("net.md_5.bungee.api.chat.BaseComponent"); Class<?> arr=Array.newInstance(base,0).getClass();
+            spigot.getClass().getMethod("sendMessage",type,arr).invoke(spigot,action,comps);
+        }catch(Throwable ignored){}
+    }
+}

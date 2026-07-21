@@ -1,0 +1,52 @@
+package ru.davidgrief.chatdg.services;
+
+import org.bukkit.Bukkit;
+import org.bukkit.command.CommandSender;
+import org.bukkit.entity.Player;
+import ru.davidgrief.chatdg.ChatDG;
+
+import java.util.Collections;
+import java.util.List;
+import java.util.Map;
+
+public final class MessageService {
+    private final ChatDG plugin;
+
+    public MessageService(ChatDG plugin) { this.plugin = plugin; }
+
+    public String raw(String key) {
+        String value = plugin.getConfigManager().getMessages().getString(key);
+        return value == null ? "&cMissing message: " + key : value;
+    }
+
+    public String format(String key, Player context, Map<String, String> replacements) {
+        String value = raw(key);
+        if (replacements != null) {
+            for (Map.Entry<String, String> entry : replacements.entrySet()) {
+                value = value.replace("%" + entry.getKey() + "%", entry.getValue() == null ? "" : entry.getValue());
+            }
+        }
+        value = plugin.getPlaceholderService().apply(context, value, null);
+        return plugin.getColorUtil().colorize(value);
+    }
+
+    public void send(CommandSender sender, String key) { send(sender, key, Collections.<String, String>emptyMap()); }
+
+    public void send(CommandSender sender, String key, Map<String, String> replacements) {
+        Player player = sender instanceof Player ? (Player) sender : null;
+        sender.sendMessage(format(key, player, replacements));
+    }
+
+    public void broadcast(String key, Map<String, String> replacements) {
+        for (Player player : Bukkit.getOnlinePlayers()) {
+            player.sendMessage(format(key, player, replacements));
+        }
+        Bukkit.getConsoleSender().sendMessage(format(key, null, replacements));
+    }
+
+    public void sendList(CommandSender sender, String key) {
+        List<String> lines = plugin.getConfigManager().getMessages().getStringList(key);
+        Player player = sender instanceof Player ? (Player) sender : null;
+        for (String line : lines) sender.sendMessage(plugin.getColorUtil().colorize(plugin.getPlaceholderService().apply(player, line, null)));
+    }
+}

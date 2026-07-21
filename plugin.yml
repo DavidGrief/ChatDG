@@ -1,0 +1,53 @@
+package ru.davidgrief.chatdg.services;
+
+import ru.davidgrief.chatdg.storage.StorageProvider;
+
+import java.util.Collections;
+import java.util.HashSet;
+import java.util.Map;
+import java.util.Set;
+import java.util.UUID;
+import java.util.concurrent.ConcurrentHashMap;
+
+public final class IgnoreService {
+    private final StorageProvider storage;
+    private final ConcurrentHashMap<UUID, Set<UUID>> ignores = new ConcurrentHashMap<UUID, Set<UUID>>();
+
+    public IgnoreService(StorageProvider storage) {
+        this.storage = storage;
+        Map<UUID, Set<UUID>> loaded = storage.loadIgnores();
+        for (Map.Entry<UUID, Set<UUID>> entry : loaded.entrySet()) {
+            ignores.put(entry.getKey(), Collections.newSetFromMap(new ConcurrentHashMap<UUID, Boolean>()));
+            ignores.get(entry.getKey()).addAll(entry.getValue());
+        }
+    }
+
+    public boolean toggleIgnore(UUID owner, UUID target, boolean ignored) {
+        Set<UUID> set = ignores.get(owner);
+        if (set == null) {
+            Set<UUID> created = Collections.newSetFromMap(new ConcurrentHashMap<UUID, Boolean>());
+            Set<UUID> previous = ignores.putIfAbsent(owner, created);
+            set = previous == null ? created : previous;
+        }
+        boolean changed = ignored ? set.add(target) : set.remove(target);
+        if (set.isEmpty()) ignores.remove(owner, set);
+        if (changed) storage.saveIgnores(snapshot());
+        return changed;
+    }
+
+    public boolean isIgnoring(UUID owner, UUID target) {
+        Set<UUID> set = ignores.get(owner);
+        return set != null && set.contains(target);
+    }
+
+    public Set<UUID> getIgnored(UUID owner) {
+        Set<UUID> set = ignores.get(owner);
+        return set == null ? Collections.<UUID>emptySet() : new HashSet<UUID>(set);
+    }
+
+    public Map<UUID, Set<UUID>> snapshot() {
+        Map<UUID, Set<UUID>> copy = new ConcurrentHashMap<UUID, Set<UUID>>();
+        for (Map.Entry<UUID, Set<UUID>> entry : ignores.entrySet()) copy.put(entry.getKey(), new HashSet<UUID>(entry.getValue()));
+        return copy;
+    }
+}

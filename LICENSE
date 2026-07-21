@@ -1,0 +1,55 @@
+package ru.davidgrief.chatdg.services;
+
+import ru.davidgrief.chatdg.models.MuteRecord;
+import ru.davidgrief.chatdg.storage.StorageProvider;
+
+import java.util.Map;
+import java.util.UUID;
+import java.util.concurrent.ConcurrentHashMap;
+
+public final class MuteService {
+    private final StorageProvider storage;
+    private final ConcurrentHashMap<UUID, MuteRecord> mutes = new ConcurrentHashMap<UUID, MuteRecord>();
+
+    public MuteService(StorageProvider storage) {
+        this.storage = storage;
+        this.mutes.putAll(storage.loadMutes());
+    }
+
+    public MuteRecord getActiveMute(UUID uuid) {
+        MuteRecord record = mutes.get(uuid);
+        if (record != null && record.isExpired(System.currentTimeMillis())) {
+            mutes.remove(uuid);
+            storage.saveMutes(mutes);
+            return null;
+        }
+        return record;
+    }
+
+    public void mute(MuteRecord record) {
+        mutes.put(record.getPlayerUuid(), record);
+        storage.saveMutes(mutes);
+    }
+
+    public boolean unmute(UUID uuid) {
+        boolean removed = mutes.remove(uuid) != null;
+        if (removed) storage.saveMutes(mutes);
+        return removed;
+    }
+
+    public int activeCount() {
+        cleanupExpired();
+        return mutes.size();
+    }
+
+    public void cleanupExpired() {
+        boolean changed = false;
+        long now = System.currentTimeMillis();
+        for (Map.Entry<UUID, MuteRecord> entry : mutes.entrySet()) {
+            if (entry.getValue().isExpired(now) && mutes.remove(entry.getKey(), entry.getValue())) changed = true;
+        }
+        if (changed) storage.saveMutes(mutes);
+    }
+
+    public Map<UUID, MuteRecord> snapshot() { return new ConcurrentHashMap<UUID, MuteRecord>(mutes); }
+}

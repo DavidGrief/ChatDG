@@ -1,0 +1,43 @@
+package ru.davidgrief.chatdg.services;
+
+import org.bukkit.Bukkit;
+import org.bukkit.entity.Player;
+import ru.davidgrief.chatdg.ChatDG;
+import ru.davidgrief.chatdg.utils.TextUtil;
+
+import java.util.ArrayDeque;
+import java.util.Deque;
+import java.util.Map;
+import java.util.UUID;
+import java.util.concurrent.ConcurrentHashMap;
+
+public final class AntiSpamService {
+    public static final class Result { public final boolean blocked; public final String reason; Result(boolean b,String r){blocked=b;reason=r;} }
+    private static final class Entry { final long time; final String text; Entry(long t,String s){time=t;text=s;} }
+    private final ChatDG plugin;
+    private final Map<UUID, Deque<Entry>> history = new ConcurrentHashMap<UUID, Deque<Entry>>();
+    private final Map<UUID, Long> lastMessage = new ConcurrentHashMap<UUID, Long>();
+    public AntiSpamService(ChatDG plugin){this.plugin=plugin;}
+
+    public Result check(Player p,String message){
+        if(!plugin.getConfig().getBoolean("antispam.enabled",true)||p.hasPermission("chatdg.bypass.spam")||p.hasPermission("chatdg.chat.bypass.spam")) return new Result(false,"");
+        long now=System.currentTimeMillis(); long cooldown=plugin.getConfig().getLong("antispam.cooldown-ms",1200L);
+        Long last=lastMessage.get(p.getUniqueId());
+        if(last!=null && now-last<cooldown && !p.hasPermission("chatdg.chat.bypass.cooldown")) return violation(p,"cooldown");
+        Deque<Entry> q=history.get(p.getUniqueId()); if(q==null){q=new ArrayDeque<Entry>();history.put(p.getUniqueId(),q);} 
+        long window=plugin.getConfig().getLong("antispam.window-ms",10000L); while(!q.isEmpty()&&now-q.peekFirst().time>window) q.removeFirst();
+        int max=plugin.getConfig().getInt("antispam.max-messages",5); if(q.size()>=max) return violation(p,"rate");
+        if(!q.isEmpty()){
+            String prev=q.peekLast().text;
+            if(plugin.getConfig().getBoolean("antispam.block-duplicates",true)&&prev.equalsIgnoreCase(message.trim())) return violation(p,"duplicate");
+            double threshold=plugin.getConfig().getDouble("antispam.similarity-threshold",0.88D);
+            if(plugin.getConfig().getBoolean("antispam.block-similar",true)&&message.length()>=4&&TextUtil.similarity(prev,message)>=threshold) return violation(p,"similar");
+        }
+        q.addLast(new Entry(now,message.trim())); lastMessage.put(p.getUniqueId(),now); return new Result(false,"");
+    }
+    private Result violation(Player p,String reason){
+        String cmd=plugin.getConfig().getString("antispam.command",""); if(cmd!=null&&!cmd.trim().isEmpty()) Bukkit.dispatchCommand(Bukkit.getConsoleSender(),cmd.replace("%player%",p.getName()).replace("%reason%",reason));
+        return new Result(true,reason);
+    }
+    public void clear(UUID u){history.remove(u);lastMessage.remove(u);} public void clearAll(){history.clear();lastMessage.clear();}
+}
