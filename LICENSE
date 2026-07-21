@@ -1,55 +1,35 @@
-package ru.davidgrief.chatdg.services;
+ChatDG License
 
-import ru.davidgrief.chatdg.models.MuteRecord;
-import ru.davidgrief.chatdg.storage.StorageProvider;
+Copyright (c) 2026 Давид Grief
 
-import java.util.Map;
-import java.util.UUID;
-import java.util.concurrent.ConcurrentHashMap;
+Все права на плагин ChatDG и его исходный код принадлежат автору — Давид Grief.
 
-public final class MuteService {
-    private final StorageProvider storage;
-    private final ConcurrentHashMap<UUID, MuteRecord> mutes = new ConcurrentHashMap<UUID, MuteRecord>();
+Разрешается:
+- использовать плагин на своих Minecraft-серверах;
+- изменять исходный код для личного использования;
+- изучать исходный код;
+- создавать собственные приватные сборки на основе ChatDG.
 
-    public MuteService(StorageProvider storage) {
-        this.storage = storage;
-        this.mutes.putAll(storage.loadMutes());
-    }
+Запрещается:
+- выдавать ChatDG или его исходный код за свою разработку;
+- удалять или изменять информацию об авторе;
+- перепродавать плагин или его исходный код без разрешения автора;
+- публиковать изменённые версии ChatDG от своего имени;
+- копировать значительные части исходного кода в другие проекты с целью присвоения авторства;
+- распространять исходный код или готовые сборки ChatDG на сторонних ресурсах без разрешения автора.
 
-    public MuteRecord getActiveMute(UUID uuid) {
-        MuteRecord record = mutes.get(uuid);
-        if (record != null && record.isExpired(System.currentTimeMillis())) {
-            mutes.remove(uuid);
-            storage.saveMutes(mutes);
-            return null;
-        }
-        return record;
-    }
+При публикации информации о ChatDG необходимо указывать оригинальное название проекта и автора:
 
-    public void mute(MuteRecord record) {
-        mutes.put(record.getPlayerUuid(), record);
-        storage.saveMutes(mutes);
-    }
+ChatDG
+Автор: Давид Grief
 
-    public boolean unmute(UUID uuid) {
-        boolean removed = mutes.remove(uuid) != null;
-        if (removed) storage.saveMutes(mutes);
-        return removed;
-    }
+Используя исходный код ChatDG, вы соглашаетесь с условиями данной лицензии.
 
-    public int activeCount() {
-        cleanupExpired();
-        return mutes.size();
-    }
+Плагин предоставляется «как есть».
+Автор не несёт ответственности за возможные ошибки, потерю данных, проблемы с сервером или другой ущерб, возникший в результате использования плагина.
 
-    public void cleanupExpired() {
-        boolean changed = false;
-        long now = System.currentTimeMillis();
-        for (Map.Entry<UUID, MuteRecord> entry : mutes.entrySet()) {
-            if (entry.getValue().isExpired(now) && mutes.remove(entry.getKey(), entry.getValue())) changed = true;
-        }
-        if (changed) storage.saveMutes(mutes);
-    }
+Для получения разрешения на использование, распространение или публикацию ChatDG необходимо получить согласие автора.
 
-    public Map<UUID, MuteRecord> snapshot() { return new ConcurrentHashMap<UUID, MuteRecord>(mutes); }
-}
+Автор: Давид Grief
+Copyright (c) 2026
+All Rights Reserved.
